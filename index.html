@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atlas Digital Pesisir Bedono | ESC26006</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; display: flex; height: 100vh; overflow: hidden; background-color: #f4f6f9; }
+        
+        /* Layout Kiri (Peta - 65%) */
+        #map-container { width: 65%; height: 100%; position: relative; }
+        #map { width: 100%; height: 100%; z-index: 1; background: #e5e3df; }
+
+        /* Layout Kanan (Sidebar Dashboard - 35%) */
+        #sidebar { 
+            width: 35%; height: 100%; padding: 20px; box-sizing: border-box; 
+            background: #ffffff; display: flex; flex-direction: column; gap: 15px;
+            box-shadow: -4px 0 10px rgba(0,0,0,0.05); z-index: 10; overflow-y: auto;
+        }
+
+        .header { text-align: center; border-bottom: 2px solid #004080; padding-bottom: 12px; }
+        .header h1 { margin: 0; font-size: 18px; color: #004080; text-transform: uppercase; letter-spacing: 0.5px; }
+        .header p { margin: 5px 0 0 0; font-size: 12px; color: #666; }
+
+        /* Panel Pilihan Peta & Waktu */
+        .control-group { background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e1e4e8; }
+        .control-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+        select { padding: 6px; border-radius: 4px; border: 1px solid #ccc; font-size: 12px; font-family: 'Inter', sans-serif; }
+        
+        /* Tombol & Slider */
+        #playBtn { background: #004080; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; width: 100%; transition: background 0.2s; }
+        #playBtn:hover { background: #002b5e; }
+        .slider-container { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+        input[type=range] { flex-grow: 1; cursor: pointer; }
+
+        /* Panel Data & Impact */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .stat-box { background: #fff; padding: 12px; border-radius: 6px; border: 1px solid #e1e4e8; text-align: center; }
+        .stat-box h3 { margin: 0; font-size: 11px; color: #666; font-weight: 600; text-transform: uppercase; }
+        .stat-box .val { font-size: 22px; font-weight: 700; margin: 8px 0 2px 0; color: #004080; }
+        .stat-box.impact .val { color: #c0392b; }
+        .stat-box .sub-val { font-size: 10px; color: #888; font-weight: 600; }
+
+        .status-badge { display: block; padding: 6px; border-radius: 4px; font-size: 12px; font-weight: 600; color: white; text-align: center; margin-top: 5px; }
+
+        /* Area Grafik */
+        .chart-container { background: #fff; padding: 12px; border-radius: 6px; border: 1px solid #e1e4e8; height: 180px; flex-grow: 1; min-height: 150px; }
+
+        /* Kartu Kebijakan */
+        .policy-card { background: #f0f4f8; padding: 15px; border-radius: 6px; border-left: 4px solid #004080; }
+        .policy-card h3 { margin: 0 0 8px 0; font-size: 13px; color: #004080; }
+        .policy-card p { margin: 0; font-size: 12.5px; color: #444; line-height: 1.5; text-align: justify; }
+
+        /* Tombol Reset Peta */
+        .reset-btn { background: #fff; border: 1px solid #004080; color: #004080; padding: 8px; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; text-align: center; width: 100%; margin-top: 5px; }
+        .reset-btn:hover { background: #004080; color: #fff; }
+
+        /* Legenda */
+        .legend { position: absolute; bottom: 20px; left: 20px; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 6px; z-index: 1000; font-size: 11px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .legend-item { display: flex; align-items: center; margin-bottom: 6px; }
+        .legend-item:last-child { margin-bottom: 0; }
+        .legend-color { width: 16px; height: 16px; margin-right: 8px; border: 1px solid #ccc; border-radius: 2px; }
+    </style>
+</head>
+<body>
+
+    <div id="map-container">
+        <div id="map"></div>
+        <div class="legend">
+            <strong style="display:block; margin-bottom: 8px; font-size: 12px;">Legenda Spasial</strong>
+            <div class="legend-item">
+                <div class="legend-color" style="background: rgba(0, 100, 255, 0.6); border: none;"></div>
+                <span>Area Tergenang Air (Abrasi / Rob)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: transparent; border: 1px dashed #fff; background-color: #555;"></div>
+                <span>Daratan / Infrastruktur / Mangrove</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="sidebar">
+        <div class="header">
+            <h1>TIM ESC26006 | GAMMAFEST 2026</h1>
+            <p>Sistem Pemantauan Spatio-Temporal Bedono</p>
+        </div>
+
+        <div class="control-group">
+            <div class="control-row">
+                <label style="font-size: 12px; font-weight:600;">Tipe Peta Dasar:</label>
+                <select id="mapTypeSelector">
+                    <option value="y">Hybrid (Satelit dan Label)</option>
+                    <option value="s">Satelit Murni</option>
+                    <option value="m">Peta Jalan (Roadmap)</option>
+                </select>
+            </div>
+            <div class="control-row">
+                <label style="font-size: 12px; font-weight:600;">Tahun Observasi:</label>
+                <select id="yearDropdown"></select>
+            </div>
+            <button id="playBtn">Mulai Animasi Perubahan Waktu</button>
+            <div class="slider-container">
+                <span style="font-size: 11px; font-weight:700;">1990</span>
+                <input type="range" id="yearSlider" min="1990" max="2035" value="1990" step="1">
+                <span style="font-size: 11px; font-weight:700; color:#c0392b;">2035</span>
+            </div>
+        </div>
+
+        <div>
+            <span id="statusBadge" class="status-badge" style="background: #7f8c8d;">Memuat Data...</span>
+            <div class="stats-grid" style="margin-top: 10px;">
+                <div class="stat-box">
+                    <h3>Total Luasan Genangan</h3>
+                    <div class="val" id="displayArea">--</div>
+                    <div class="sub-val">Hektar (Ha)</div>
+                </div>
+                <div class="stat-box impact">
+                    <h3>Ringkasan Akumulasi Dampak</h3>
+                    <div class="val" id="displayImpact">--</div>
+                    <div class="sub-val" id="displaySpeed">Tingkat Degradasi: -- Ha/Tahun</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="trendChart"></canvas>
+        </div>
+
+        <div class="policy-card">
+            <h3>Rekomendasi Kebijakan Wilayah</h3>
+            <p id="policyText">Memuat rekomendasi...</p>
+        </div>
+
+        <button class="reset-btn" onclick="resetView()">
+            Kembalikan Tampilan Peta ke Pengaturan Awal
+        </button>
+    </div>
+
+    <script>
+        // 1. Setup Peta (Batas dan Center TIF presisi)
+        var mapBounds = [[-6.960, 110.440], [-6.850, 110.550]]; 
+        var map = L.map('map', { center: [-6.909, 110.495], zoom: 14, minZoom: 13, maxBounds: mapBounds, maxBoundsViscosity: 1.0 });
+
+        // Layer Peta Dasar Google
+        var googleLayers = {
+            'y': L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20, subdomains:['mt0','mt1','mt2','mt3'], attribution: '© Google Maps' }),
+            's': L.tileLayer('http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 20, subdomains:['mt0','mt1','mt2','mt3'], attribution: '© Google Maps' }),
+            'm': L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { maxZoom: 20, subdomains:['mt0','mt1','mt2','mt3'], attribution: '© Google Maps' })
+        };
+        googleLayers['y'].addTo(map);
+
+        // Ganti Tipe Peta via Dropdown
+        document.getElementById('mapTypeSelector').addEventListener('change', function() {
+            for (let key in googleLayers) { map.removeLayer(googleLayers[key]); }
+            googleLayers[this.value].addTo(map);
+            if(currentOverlay) { currentOverlay.bringToFront(); }
+        });
+
+        // Setup Overlay (Hasil Ekstraksi Presisi Python)
+        var imageBounds = [[-6.945144956113257, 110.4593626181319], [-6.872920407270048, 110.53158716697511]]; 
+        var currentOverlay = null;
+        
+        // Setup Variabel Data
+        var areaData = {};
+        var years = [];
+        var areas = [];
+        var baselineArea = 0;
+
+        // Setup Chart.js (Grafik Kumulatif)
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        var ctx = document.getElementById('trendChart').getContext('2d');
+        var trendChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                { label: 'Data Observasi Historis', borderColor: '#2980b9', backgroundColor: 'rgba(41, 128, 185, 0.2)', fill: true, data: [], tension: 0.3, pointRadius: 1.5, borderWidth: 2 },
+                { label: 'Proyeksi Jangka Panjang', borderColor: '#c0392b', backgroundColor: 'rgba(192, 57, 43, 0.2)', borderDash: [4, 4], fill: true, data: [], tension: 0.3, pointRadius: 1.5, borderWidth: 2 }
+            ]},
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: true, position: 'top', labels: { boxWidth: 12, font: {size: 10} } } },
+                scales: { 
+                    x: { ticks: { font: {size: 9}, maxRotation: 45, minRotation: 45 }, grid: { display: false } }, 
+                    y: { ticks: { font: {size: 10} }, title: {display: true, text: 'Luas Genangan (Ha)', font: {size: 10, weight: 'bold'}} } 
+                },
+                animation: { duration: 400 }
+            }
+        });
+
+        // 2. Load Data JSON
+        fetch('dashboard_assets/stats_bedono.json')
+            .then(response => response.json())
+            .then(data => {
+                areaData = data;
+                var dropdown = document.getElementById('yearDropdown');
+                for (let year = 1990; year <= 2035; year++) {
+                    years.push(year);
+                    areas.push(areaData[year]);
+                    let option = document.createElement("option");
+                    option.text = year; option.value = year;
+                    dropdown.add(option);
+                }
+                baselineArea = areaData[1990]; 
+                updateMapAndInfo(1990);
+            });
+
+        // 3. Fungsi Utama Pembaruan UI
+        function updateMapAndInfo(selectedYear) {
+            selectedYear = parseInt(selectedYear);
+            var currentArea = areaData[selectedYear];
+            
+            // Sinkronisasi Kontrol 
+            document.getElementById('yearSlider').value = selectedYear;
+            document.getElementById('yearDropdown').value = selectedYear;
+            
+            // Update Teks Angka
+            document.getElementById('displayArea').innerText = currentArea.toFixed(2);
+            var impact = currentArea - baselineArea;
+            document.getElementById('displayImpact').innerText = impact > 0 ? "+" + impact.toFixed(2) : impact.toFixed(2);
+
+            // Hitung Laju Rata-rata per tahun sejak 1990
+            var selisihTahun = selectedYear - 1990;
+            var laju = selisihTahun > 0 ? (impact / selisihTahun).toFixed(2) : "0.00";
+            document.getElementById('displaySpeed').innerText = "Tingkat Degradasi: " + laju + " Ha/Tahun";
+
+            // Update Status & Kebijakan Dinamis (3 Fase Formal)
+            var badge = document.getElementById('statusBadge');
+            var policy = document.getElementById('policyText');
+            
+            if (selectedYear <= 2010) {
+                // Fase 1: 1990-2010
+                badge.innerText = "Data Observasi Historis (" + selectedYear + ")";
+                badge.style.background = "#27ae60"; // Hijau
+                policy.innerHTML = "<strong>Tingkat Risiko: Rendah.</strong> Stabilitas ekologi daratan relatif terjaga. Rekomendasi difokuskan pada penguatan regulasi tata guna lahan pesisir serta pelestarian sabuk hijau ekosistem mangrove.";
+            } else if (selectedYear <= 2025) {
+                // Fase 2: 2011-2025
+                badge.innerText = "Data Observasi Historis (" + selectedYear + ")";
+                badge.style.background = "#d35400"; // Oranye
+                policy.innerHTML = "<strong>Tingkat Risiko: Menengah.</strong> Terdapat indikasi perluasan intrusi air laut yang signifikan. Diperlukan intervensi berupa pembangunan infrastruktur pelindung (tanggul laut) dan restorasi ekosistem pesisir secara masif.";
+            } else {
+                // Fase 3: 2026-2035
+                badge.innerText = "Proyeksi Jangka Panjang (" + selectedYear + ")";
+                badge.style.background = "#c0392b"; // Merah
+                policy.innerHTML = "<strong>Tingkat Risiko: Tinggi.</strong> Pemodelan spasial menunjukkan tingkat kerentanan wilayah mencapai titik kritis. Prioritas kebijakan harus diarahkan pada penyusunan rencana kontingensi wilayah dan manajemen relokasi permukiman maupun fasilitas publik.";
+            }
+
+            // Update Peta dengan Transisi Mulus (Cross-Fade)
+            var imageUrl = 'dashboard_assets/maps/map_' + selectedYear + '.png';
+            var newOverlay = L.imageOverlay(imageUrl, imageBounds, { opacity: 0 }).addTo(map);
+            
+            var newImageElement = newOverlay.getElement();
+            if(newImageElement) {
+                newImageElement.style.transition = 'opacity 0.6s ease-in-out';
+            }
+
+            setTimeout(() => {
+                if(newImageElement) newImageElement.style.opacity = 0.85;
+                if (currentOverlay) {
+                    var oldOverlay = currentOverlay;
+                    setTimeout(() => { map.removeLayer(oldOverlay); }, 600);
+                }
+                currentOverlay = newOverlay;
+            }, 50);
+
+            // Update Grafik (Cumulative Reveal)
+            var actualData = [];
+            var predictData = [];
+            for (let i = 0; i < years.length; i++) {
+                let y = years[i];
+                if (y > selectedYear) {
+                    actualData.push(null);
+                    predictData.push(null);
+                } else {
+                    if (y <= 2025) {
+                        actualData.push(areas[i]);
+                        predictData.push(y === 2025 ? areas[i] : null); 
+                    } else {
+                        actualData.push(null);
+                        predictData.push(areas[i]);
+                    }
+                }
+            }
+            trendChart.data.labels = years;
+            trendChart.data.datasets[0].data = actualData;
+            trendChart.data.datasets[1].data = predictData;
+            trendChart.update();
+        }
+
+        // Event Listener Manual
+        document.getElementById('yearSlider').addEventListener('input', function() { updateMapAndInfo(this.value); });
+        document.getElementById('yearDropdown').addEventListener('change', function() { updateMapAndInfo(this.value); });
+
+        // Logika Animasi (Timelapse)
+        var playBtn = document.getElementById('playBtn');
+        var timer = null;
+        var isPlaying = false;
+
+        playBtn.addEventListener('click', function() {
+            if (isPlaying) {
+                clearInterval(timer);
+                playBtn.innerHTML = 'Mulai Animasi Perubahan Waktu';
+                playBtn.style.background = '#004080';
+                isPlaying = false;
+            } else {
+                if (parseInt(document.getElementById('yearSlider').value) === 2035) { updateMapAndInfo(1990); }
+                playBtn.innerHTML = 'Jeda Animasi Perubahan Waktu';
+                playBtn.style.background = '#e74c3c';
+                isPlaying = true;
+
+                timer = setInterval(function() {
+                    var currentVal = parseInt(document.getElementById('yearSlider').value);
+                    if (currentVal < 2035) {
+                        updateMapAndInfo(currentVal + 1);
+                    } else {
+                        clearInterval(timer);
+                        playBtn.innerHTML = 'Mulai Animasi Perubahan Waktu';
+                        playBtn.style.background = '#004080';
+                        isPlaying = false;
+                    }
+                }, 800); 
+            }
+        });
+
+        // Fungsi Reset Peta ke Default
+        function resetView() {
+            map.flyTo([-6.909, 110.495], 14, { animate: true, duration: 1.5 });
+        }
+    </script>
+</body>
+</html>
